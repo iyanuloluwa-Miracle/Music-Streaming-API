@@ -14,6 +14,7 @@ mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
 });
 
 
-//Models
-require('./User')
+// Load models
+require('./User');
 require('./Song')
+

@@ -8,7 +8,7 @@ const generateToken = (user) => {
   };
 
   const options = {
-    expiresIn: '1h',
+    expiresIn: '3h',
   };
 
   return jwt.sign(payload, process.env.JWT_SECRET, options);
