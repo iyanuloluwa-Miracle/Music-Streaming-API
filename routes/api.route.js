@@ -16,8 +16,8 @@ router.post('/login', authController.login);
 router.post('/logout', authController.logout);
 
 //Router for music
-router.post('/upload', authUtils.verifyToken, musicController.upload);
-router.get('/song/:id', authUtils.verifyToken, musicController.getSong);
+router.post('/track',musicController.uploadTrack);
+router.get('/song/:id',  musicController.playTrack);
 
 
 module.exports = router;

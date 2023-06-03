@@ -1,80 +1,80 @@
-const Song = require('../models/Song');
-const path = require('path');
-const jwt = require('jsonwebtoken');
+const { Readable } = require('stream');
+const mongodb = require('mongodb');
+const { db } = require('../models/database');
+const Track = require('../models/track');
 
-
-exports.upload = async (req, res) => {
-  try {
-    // Store the uploaded song details in the database
-    const { originalname, mimetype, filename } = req.file;
-
-    // Verify the token
-    const token = req.headers.authorization;
-    if (!token) {
-      return res.status(401).send('Unauthorized');
-    }
-
-    try {
-      const decodedToken = jwt.verify(token.replace('Bearer ', ''), process.env.JWT_SECRET);
-      // Assuming you have stored the userId in the request object during authentication
-      const userId = decodedToken.userId;
-      // You can perform additional authorization checks here if needed
-
-      // Create a new song record in the database
-      const newSong = new Song({
-        originalname,
-        mimetype,
-        filename,
-        userId
-      });
-
-      await newSong.save();
-
-      res.send('Song uploaded successfully');
-    } catch (error) {
-      res.status(401).send('Unauthorized');
-    }
-  } catch (error) {
-    res.status(500).send('Internal Server Error');
+exports.uploadTrack = (req, res) => {
+  if (req.fileValidationError) {
+    return res.status(400).json({ message: "Upload Request Validation Failed" });
+  } else if (!req.body.name) {
+    return res.status(400).json({ message: "No track name in request body" });
   }
+
+  let trackName = req.body.name;
+
+  // Covert buffer to Readable Stream
+  const readableTrackStream = new Readable();
+  readableTrackStream.push(req.file.buffer);
+  readableTrackStream.push(null);
+
+  let bucket = new mongodb.GridFSBucket(db, {
+    bucketName: 'tracks'
+  });
+
+  let uploadStream = bucket.openUploadStream(trackName);
+  let id = uploadStream.id;
+  readableTrackStream.pipe(uploadStream);
+
+  uploadStream.on('error', () => {
+    return res.status(500).json({ message: "Error uploading file" });
+  });
+
+  uploadStream.on('finish', () => {
+    // Get the download URL for the uploaded track
+    const downloadUrl = `/tracks/${id}`;
+
+    const track = new Track({
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
+      length: req.file.size,
+      uploadDate: new Date(),
+      md5: req.file.md5,
+      metadata: {
+        trackName: trackName
+      }
+    });
+
+    track.save()
+      .then(() => {
+        return res.status(201).json({ 
+          message: "File uploaded successfully, stored under Mongo ObjectID: " + id,
+          downloadUrl: downloadUrl
+        });
+      })
+      .catch(() => {
+        return res.status(500).json({ message: "Error saving track information" });
+      });
+  });
 };
 
-exports.getSong = async (req, res) => {
-  try {
-    const songId = req.params.id;
+exports.playTrack = (req, res) => {
+  const trackId = new mongodb.ObjectID(req.params.trackId);
 
-    // Retrieve the song from the database based on the songId
-    const song = await Song.findById(songId);
-    if (!song) {
-      return res.status(404).send('Song not found');
-    }
+  let bucket = new mongodb.GridFSBucket(db, {
+    bucketName: 'tracks'
+  });
 
-    // Assuming you have stored the path where the songs are stored
-    const filePath = path.join(__dirname, '..', 'path', 'to', 'songs', song.filename);
+  // Open download stream for the track
+  let downloadStream = bucket.openDownloadStream(trackId);
 
-    // Verify the token
-    const token = req.headers.authorization;
-    if (!token) {
-      return res.status(401).send('Unauthorized');
-    }
+  // Set the response headers for audio playback
+  res.set('content-type', 'audio/mp3');
+  res.set('accept-ranges', 'bytes');
 
-    try {
-      const decodedToken = jwt.verify(token.replace('Bearer ', ''), process.env.JWT_SECRET);
-      // Assuming you have stored the userId in the request object during authentication
-      const userId = decodedToken.userId;
-      // You can perform additional authorization checks here if needed
+  // Pipe the download stream to the response
+  downloadStream.pipe(res);
 
-      // Send the song file to the client
-      res.sendFile(filePath, (err) => {
-        if (err) {
-          res.status(500).send('Internal Server Error');
-        }
-      });
-    } catch (error) {
-      res.status(401).send('Unauthorized');
-    }
-  } catch (error) {
-    res.status(500).send('Internal Server Error');
-  }
+  downloadStream.on('error', () => {
+    return res.status(500).json({ message: "Error streaming the track" });
+  });
 };
-

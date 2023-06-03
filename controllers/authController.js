@@ -1,3 +1,4 @@
+//Very Important
 require("../models/database");
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
@@ -61,4 +62,3 @@ exports.logout = async (req, res) => {
       res.status(400).json({ success: false, error: err.message });
     }
   };
-  
