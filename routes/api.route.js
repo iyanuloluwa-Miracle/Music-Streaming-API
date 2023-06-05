@@ -16,7 +16,7 @@ router.post('/login', authController.login);
 router.post('/logout', authController.logout);
 
 //Router for music
-router.post('/track',musicController.uploadTrack);
+router.post('/uploadTrack',musicController.uploadTrack);
 router.get('/song/:id',  musicController.playTrack);
 
 
